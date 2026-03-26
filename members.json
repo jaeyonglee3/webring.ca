@@ -1,0 +1,26 @@
+[
+  {
+    "slug": "stanley",
+    "name": "Stanley",
+    "url": "https://example.com/stanley",
+    "city": "Toronto",
+    "type": "developer",
+    "active": true
+  },
+  {
+    "slug": "maple",
+    "name": "Maple Dev",
+    "url": "https://example.org/maple",
+    "city": "Vancouver",
+    "type": "designer",
+    "active": true
+  },
+  {
+    "slug": "northern",
+    "name": "Northern Builder",
+    "url": "https://example.net/northern",
+    "city": "Montreal",
+    "type": "founder",
+    "active": true
+  }
+]
