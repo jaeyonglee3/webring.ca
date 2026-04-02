@@ -53,10 +53,10 @@ app.get('/', async (c) => {
           flex-shrink: 0;
         }
         .landing-intro {
-          font-size: 1.05rem;
+          font-size: 1.2rem;
           font-weight: 400;
           line-height: 1.55;
-          color: var(--fg-muted);
+          color: var(--fg);
           padding: 0 2rem 1.2rem;
           max-width: 42ch;
         }
@@ -75,53 +75,6 @@ app.get('/', async (c) => {
           min-height: 0;
         }
 
-        /* ── Join section collapsible ── */
-        .join-header {
-          width: 100%;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1.1rem 2rem;
-          background: none;
-          border: none;
-          border-top: 2px solid var(--border-strong);
-          cursor: pointer;
-          font-family: 'Inter', sans-serif;
-          font-size: 1.4rem;
-          font-weight: 700;
-          letter-spacing: -0.03em;
-          color: var(--fg);
-          text-align: left;
-          line-height: 1.15;
-        }
-        .join-toggle {
-          flex-shrink: 0;
-          width: 30px;
-          height: 30px;
-          border: 1.5px solid var(--border-strong);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .join-toggle svg {
-          width: 14px;
-          height: 14px;
-          stroke: var(--fg);
-          stroke-width: 2;
-          fill: none;
-        }
-        .join-body {
-          overflow: hidden;
-          max-height: 0;
-          transition: max-height 0.3s ease;
-        }
-        .join-body.is-open {
-          max-height: 300px;
-        }
-        .join-body-inner {
-          padding: 0 2rem 1.8rem;
-        }
 
         /* ── Members list ── */
         .member-list { list-style: none; padding: 0 2rem; }
@@ -146,52 +99,35 @@ app.get('/', async (c) => {
           color: var(--fg-muted);
         }
 
-        /* ── Join section ── */
-        .join-text {
-          font-size: 1.05rem;
-          line-height: 1.55;
-          color: var(--fg);
-          margin-bottom: 1rem;
-        }
-        .join-link {
-          font-size: 0.9rem;
-          font-weight: 700;
-          color: var(--accent);
-          text-decoration: none;
-        }
-        .join-link:hover { opacity: 0.7; }
 
-        /* ── Widget ── */
+        /* ── Widget (matches embed look) ── */
         .landing-widget {
           position: absolute;
           bottom: 0;
           left: 0;
           right: 0;
-          border-top: 2px solid var(--border-strong);
           padding: 0.85rem 2rem;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 1.25rem;
-          font-size: 0.85rem;
-          font-weight: 500;
-          letter-spacing: 0.01em;
           background: var(--bg);
         }
+        .landing-widget-inner {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.5rem 0.75rem;
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          font-size: 0.8rem;
+        }
         .landing-widget a {
-          color: var(--fg);
+          color: var(--accent);
           text-decoration: none;
-          transition: color 0.15s;
+          transition: opacity 0.15s;
         }
-        .landing-widget a:visited { color: var(--fg); }
-        .landing-widget a:hover { color: var(--accent); }
-        .landing-widget-dot {
-          width: 4px;
-          height: 4px;
-          border-radius: 50%;
-          background: var(--fg-muted);
-          flex-shrink: 0;
-        }
+        .landing-widget a:visited { color: var(--accent); }
+        .landing-widget a:hover { opacity: 0.7; }
 
         /* ── Right column — map ── */
         .landing-right {
@@ -207,8 +143,8 @@ app.get('/', async (c) => {
           display: flex;
           gap: 0;
           border-bottom: 1.5px solid var(--border);
-          margin-bottom: 1rem;
-          padding: 0 2rem;
+          margin-bottom: 0;
+          padding: 0;
         }
         .tab-btn {
           background: none;
@@ -381,19 +317,16 @@ app.get('/', async (c) => {
           .member-list { padding: 0 1.5rem; }
           .member-list li { padding: 0.5rem 0; }
           .member-list-meta-type { display: none; }
-          .join-header { font-size: 1.2rem; padding: 1rem 1.5rem; }
-          .join-body-inner { padding: 0 1.5rem 1.5rem; }
           .landing-right { flex: none; min-height: 40vh; padding: 1.5rem; }
           .landing-map-stage { width: 100%; padding: 1.25rem 0.25rem 1.75rem; }
           .landing-theme-toggle { top: 1.2rem; right: 1rem; width: 30px; height: 30px; }
           .landing-theme-toggle svg { width: 14px; height: 14px; }
-          .tab-bar { padding: 0 1.5rem; }
+          .tab-bar { padding: 0; }
           .tab-btn { font-size: 0.72rem; padding: 0.5rem 0.8rem; }
           .discover-name { font-size: 1.4rem; }
           .discover-visit { font-size: 0.8rem; padding: 0.5rem 1.4rem; }
         }
       </style>`)}
-      {raw(`<noscript><style>.join-body { max-height: none !important; } .join-toggle { display: none; }</style></noscript>`)}
       <div class="landing">
         {raw(`<button class="landing-theme-toggle" onclick="__toggleTheme()" aria-label="Toggle theme"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>`)}
         <div class="landing-left" id="landing-left">
@@ -418,28 +351,13 @@ app.get('/', async (c) => {
             )}
           </div>
 
-          <button class="join-header" id="join-toggle" aria-expanded="false" aria-controls="join-body">
-            <span>Join the ring</span>
-            <span class="join-toggle" aria-hidden="true">
-              {raw('<svg viewBox="0 0 16 16"><line x1="3" y1="8" x2="13" y2="8" /><line x1="8" y1="3" x2="8" y2="13" /></svg>')}
-            </span>
-          </button>
-          <div class="join-body" id="join-body">
-            <div class="join-body-inner">
-              <p class="join-text">
-                <strong>{active.length} member{active.length !== 1 ? 's' : ''}</strong> across Canada.
-                Add your site to the ring and join a community of builders sharing their work on the open web.
-              </p>
-              <a href="/join" class="join-link">Join the ring {raw('&rarr;')}</a>
-            </div>
-          </div>
-
           <div class="landing-widget">
-            <a href="/random">{raw('&larr;')} prev</a>
-            <span class="landing-widget-dot"></span>
-            <a href="/random">{raw('&#x1F341;')} webring.ca</a>
-            <span class="landing-widget-dot"></span>
-            <a href="/random">next {raw('&rarr;')}</a>
+            <div class="landing-widget-inner">
+              <a href="/random">{raw('&larr;')}</a>
+              <a href="/">{raw('&#x1F341;')} webring.ca</a>
+              <a href="/random">{raw('&rarr;')}</a>
+              <a href="/join">join</a>
+            </div>
           </div>
         </div>
 
@@ -500,18 +418,6 @@ app.get('/', async (c) => {
       {raw(`<script>var __discoverMembers = ${JSON.stringify(active.map(m => ({ slug: m.slug, name: m.name, url: m.url, city: m.city ?? '', type: m.type })))};</script>`)}
       {raw(`<script>
 (function() {
-  // Join toggle
-  var joinBtn = document.getElementById('join-toggle');
-  var joinBody = document.getElementById('join-body');
-  var MINUS = '<svg viewBox="0 0 16 16"><line x1="3" y1="8" x2="13" y2="8" /></svg>';
-  var PLUS = '<svg viewBox="0 0 16 16"><line x1="3" y1="8" x2="13" y2="8" /><line x1="8" y1="3" x2="8" y2="13" /></svg>';
-
-  joinBtn.addEventListener('click', function() {
-    var isOpen = joinBody.classList.toggle('is-open');
-    joinBtn.querySelector('.join-toggle').innerHTML = isOpen ? MINUS : PLUS;
-    joinBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-  });
-
   // Cross-panel hover: member list ↔ map dots
   var memberItems = document.querySelectorAll('[data-member-slug]');
   var mapDots = document.querySelectorAll('.canada-dot');

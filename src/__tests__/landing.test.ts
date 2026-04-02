@@ -77,13 +77,13 @@ describe('landing route', () => {
     expect(html).not.toContain('aria-controls="accordion-members"')
   })
 
-  it('renders Join as a collapsible section', async () => {
+  it('renders join link in widget', async () => {
     const app = await makeApp()
     const res = await app.request('/', {}, { WEBRING: kv })
     const html = await res.text()
 
-    expect(html).toContain('aria-controls="join-body"')
-    expect(html).toContain('Join the ring')
+    expect(html).toContain('href="/join"')
+    expect(html).toContain('class="landing-widget-inner"')
   })
 
   it('renders tab bar with Map and Discover tabs', async () => {
