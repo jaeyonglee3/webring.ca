@@ -3,6 +3,7 @@ import {
   getMembers,
   getMemberBySlug,
   getActiveMembers,
+  getEffectiveRingOrder,
   setMembers,
   getRingOrder,
   setRingOrder,
@@ -114,6 +115,45 @@ describe('getRingOrder', () => {
     const kv = createMockKV({ 'ring-order': '"just-a-string"' })
     const result = await getRingOrder(kv)
     expect(result).toEqual([])
+  })
+})
+
+describe('getEffectiveRingOrder', () => {
+  it('returns stored order when it matches active members', async () => {
+    const kv = createMockKV({
+      members: JSON.stringify([alice, { ...bob, active: true }]),
+      'ring-order': JSON.stringify(['bob', 'alice']),
+    })
+
+    const result = await getEffectiveRingOrder(kv)
+    expect(result).toEqual(['bob', 'alice'])
+  })
+
+  it('falls back to active member order when ring order is empty', async () => {
+    const kv = createMockKV({
+      members: JSON.stringify([alice, { ...bob, active: true }]),
+      'ring-order': JSON.stringify([]),
+    })
+
+    const result = await getEffectiveRingOrder(kv)
+    expect(result).toEqual(['alice', 'bob'])
+  })
+
+  it('filters inactive slugs and appends missing active members', async () => {
+    const carol: Member = {
+      slug: 'carol',
+      name: 'Carol',
+      url: 'https://carol.example.com',
+      type: 'founder',
+      active: true,
+    }
+    const kv = createMockKV({
+      members: JSON.stringify([alice, bob, carol]),
+      'ring-order': JSON.stringify(['bob', 'alice']),
+    })
+
+    const result = await getEffectiveRingOrder(kv)
+    expect(result).toEqual(['alice', 'carol'])
   })
 })
 

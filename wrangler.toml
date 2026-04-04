@@ -6,8 +6,11 @@ compatibility_date = "2025-01-01"
 # Create them with: npx wrangler kv namespace create WEBRING
 [[kv_namespaces]]
 binding = "WEBRING"
-id = "PLACEHOLDER_KV_ID"
-preview_id = "PLACEHOLDER_PREVIEW_KV_ID"
+id = "a81c3dd88c5445c2b75c4ba51d091750"
+preview_id = "01172bfbf4c34fcda8ba59b2b64daf92"
+
+[assets]
+directory = "public"
 
 [triggers]
-crons = ["0 0 * * *", "0 0 * * 0"]
+crons = ["0 0 * * *", "0 0 * * SUN"]

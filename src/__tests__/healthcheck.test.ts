@@ -71,6 +71,11 @@ describe('detectWidget', () => {
   it('rejects empty page', () => {
     expect(detectWidget('<html></html>')).toBe(false)
   })
+
+  it('rejects widget links for a different slug when slug is provided', () => {
+    const html = '<div data-webring="ca" data-member="bob"></div><a href="https://webring.ca/prev/bob">prev</a><a href="https://webring.ca/next/bob">next</a>'
+    expect(detectWidget(html, 'alice')).toBe(false)
+  })
 })
 
 describe('runHealthCheck', () => {
@@ -120,6 +125,19 @@ describe('runHealthCheck', () => {
     const kv = createMockKV({ members: JSON.stringify([alice]) })
     mockFetch({
       'https://alice.example.com': { ok: true, status: 200, body: '<div data-webring="ca"></div>' },
+    })
+
+    await runHealthCheck(kv)
+
+    const raw = await kv.get('health:alice')
+    const status: HealthStatus = JSON.parse(raw!)
+    expect(status.status).toBe('widget_missing')
+  })
+
+  it('marks as widget_missing when the widget links belong to another slug', async () => {
+    const kv = createMockKV({ members: JSON.stringify([alice]) })
+    mockFetch({
+      'https://alice.example.com': { ok: true, status: 200, body: '<div data-webring="ca" data-member="bob"></div><a href="https://webring.ca/prev/bob">prev</a><a href="https://webring.ca/next/bob">next</a>' },
     })
 
     await runHealthCheck(kv)

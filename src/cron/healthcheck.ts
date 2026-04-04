@@ -30,7 +30,7 @@ export async function runHealthCheck(kv: KVNamespace): Promise<void> {
           headers: { 'User-Agent': randomUA() },
         })
         const body = await res.text()
-        const hasWidget = detectWidget(body)
+        const hasWidget = detectWidget(body, member.slug)
 
         if (res.ok && hasWidget) {
           return {

@@ -3,6 +3,7 @@ import { resolve, join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { fisherYatesShuffle } from '../src/utils/shuffle'
+import { getMemberCoordinates } from '../src/utils/member-coords'
 
 const remote = process.argv.includes('--remote')
 const preview = process.argv.includes('--preview')
@@ -10,6 +11,23 @@ const preview = process.argv.includes('--preview')
 const membersPath = resolve(import.meta.dirname!, '..', 'members.json')
 const raw = readFileSync(membersPath, 'utf-8')
 const members = JSON.parse(raw)
+
+for (const member of members) {
+  const coords = getMemberCoordinates(member)
+  if (coords) {
+    member.lat = coords.lat
+    member.lng = coords.lng
+    continue
+  }
+
+  process.stderr.write(
+    `Missing committed coordinates for ${member.slug}. Add lat/lng or a supported city before seeding.\n`
+  )
+  process.exit(1)
+}
+
+const enrichedMembersPath = join(tmpdir(), 'webring-members-enriched.json')
+writeFileSync(enrichedMembersPath, JSON.stringify(members))
 
 const activeSlugs = members
   .filter((m: { active: boolean }) => m.active)
@@ -32,7 +50,7 @@ process.stdout.write(`Seeding ${members.length} members to KV (${target})...\n`)
 execFileSync('npx', [
   'wrangler', 'kv', 'key', 'put', 'members',
   '--binding', 'WEBRING',
-  '--path', membersPath,
+  '--path', enrichedMembersPath,
   ...flags,
 ], { cwd, stdio: 'inherit' })
 

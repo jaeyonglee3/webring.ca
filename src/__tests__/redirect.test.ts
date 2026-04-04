@@ -81,6 +81,17 @@ describe('/next/:slug', () => {
     expect(res.status).toBe(302)
     expect(res.headers.get('Location')).toBe('/')
   })
+
+  it('falls back to active member order when ring order is empty', async () => {
+    kv = createMockKV({
+      members: JSON.stringify([alice, bob, charlie]),
+      'ring-order': JSON.stringify([]),
+    })
+    const app = await makeApp()
+    const res = await request(app, '/next/alice')
+    expect(res.status).toBe(302)
+    expect(res.headers.get('Location')).toBe('https://bob.example.com')
+  })
 })
 
 describe('/prev/:slug', () => {

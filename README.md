@@ -77,6 +77,16 @@ After creating a KV namespace, seed it with the member list:
 npm run seed       # prints wrangler commands to run
 ```
 
+The seed step now uses committed repo data only. Every member must already have resolvable coordinates from either:
+- explicit `lat`/`lng` in `members.json`, or
+- a city covered by the committed city map
+
+If a contributor adds a city that is not yet covered, a maintainer can enrich coordinates locally before merge:
+
+```bash
+npm run enrich:coords
+```
+
 ## Deploy
 
 ```bash

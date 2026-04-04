@@ -8,6 +8,7 @@ A webring for Canadian builders (developers, designers, founders). Hosted on Clo
 
 - **Hono** on Cloudflare Workers — all routing, JSX server-rendering, middleware
 - **Cloudflare KV** — member list, health status, ring order. No database (D1).
+- **Cloudflare Assets** — static files served from `public/` (configured in `wrangler.toml`)
 - **htmx** — included in layout for future interactive features, NOT used in v1
 - All data access goes through `src/data.ts` — never call KV directly from routes
 
@@ -17,12 +18,15 @@ A webring for Canadian builders (developers, designers, founders). Hosted on Clo
 - CSS is inline in the Layout component. No external CSS files, no Tailwind.
 - Space Grotesk + Space Mono loaded via Google Fonts. No other font families.
 - Light/dark mode via `prefers-color-scheme`.
+- Static assets (images, SVGs) go in `public/` — never load from external CDNs.
+- Member coordinates resolved via `src/utils/member-coords.ts` (city-name fallback) — never check `lat`/`lng` directly.
 - Keep it simple. No over-engineering. This is a small community project.
 
 ## Before making changes, read:
 
 - `docs/hono.md` — Hono reference for CF Workers, JSX, routing, middleware, bindings
 - `docs/htmx.md` — htmx reference (for when we build v2 interactive features)
+- `docs/deploy-checklist.md` — pre-deploy verification steps
 
 ## Data Flow
 
@@ -31,6 +35,16 @@ A webring for Canadian builders (developers, designers, founders). Hosted on Clo
 3. Routes read from KV via `src/data.ts`
 4. Health check cron writes status to KV via `src/data.ts`
 5. Shuffle cron writes ring order to KV via `src/data.ts`
+
+## Map Pipeline
+
+1. `scripts/build-map-assets.ts` fetches Natural Earth GeoJSON, simplifies geometry, and outputs:
+   - `src/lib/canada-outline.json` / `canada-regions.json` — raw GeoJSON (build-time only, NOT bundled)
+   - `src/lib/canada-map-data.json` — pre-computed SVG paths + projection params (~344K, bundled)
+2. `src/lib/canada-map.ts` imports `canada-map-data.json` and re-creates the d3 projection for `projectToSvg()`
+3. Run `npx tsx scripts/build-map-assets.ts` to regenerate after changing map parameters
+
+**Do not import raw GeoJSON in Worker code.** The CF Workers bundle limit is 1MB compressed.
 
 ## KV Keys
 
@@ -45,6 +59,9 @@ A webring for Canadian builders (developers, designers, founders). Hosted on Clo
 - Add Tailwind or any CSS framework
 - Add htmx interactions (v2 feature — just keep the script tag in layout)
 - Add admin dashboard, auth, or email notifications
+- Import raw GeoJSON in Worker code (use pre-computed `canada-map-data.json`)
+- Load assets from external CDNs — self-host in `public/`
+- Check `member.lat`/`member.lng` directly — use `getMemberCoordinates()` from `src/utils/member-coords.ts`
 - Over-engineer. If it can be done in 10 lines, do it in 10 lines.
 
 ## Design Context

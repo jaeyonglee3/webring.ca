@@ -1,22 +1,16 @@
 import { Hono } from 'hono'
 import type { Bindings } from './types'
 import Layout from './templates/Layout'
-import landing from './routes/landing'
-import directory from './routes/directory'
-import join from './routes/join'
+import splash from './routes/splash'
 import redirect from './routes/redirect'
-import embed from './routes/embed'
 import api from './routes/api'
 import { runHealthCheck } from './cron/healthcheck'
 import { runShuffle } from './cron/shuffle'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-app.route('/', landing)
-app.route('/', directory)
-app.route('/', join)
+app.route('/', splash)
 app.route('/', redirect)
-app.route('/', embed)
 app.route('/api', api)
 
 app.notFound((c) => {
@@ -46,7 +40,7 @@ export default {
       case '0 0 * * *':
         ctx.waitUntil(runHealthCheck(env.WEBRING))
         break
-      case '0 0 * * 0':
+      case '0 0 * * SUN':
         ctx.waitUntil(runShuffle(env.WEBRING))
         break
     }

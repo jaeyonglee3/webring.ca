@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { detectWidget } from '../src/utils/widget'
+import { hasResolvableMemberCoordinates } from '../src/utils/member-coords'
 
 interface MemberInput {
   slug: string
@@ -220,6 +221,13 @@ for (const member of newMembers) {
     memberFailed = true
   }
 
+  if (!hasResolvableMemberCoordinates(member)) {
+    write('- FAIL: Coordinates are not resolvable from committed repo data. Add lat/lng or use a supported city before merge.')
+    memberFailed = true
+  } else {
+    write('- PASS: Coordinates are resolvable from committed repo data')
+  }
+
   write('\n**Site check**')
 
   try {
@@ -231,7 +239,7 @@ for (const member of newMembers) {
       write(`- PASS: ${safeUrl} responded with HTTP ${res.status}`)
 
       const body = await res.text()
-      if (detectWidget(body)) {
+      if (detectWidget(body, member.slug)) {
         write('- PASS: Webring widget detected (marker + prev/next links)')
       } else {
         write('- INFO: Widget not detected yet. Install the widget before or after merge — see https://github.com/stanleypangg/webring.ca#add-the-widget')

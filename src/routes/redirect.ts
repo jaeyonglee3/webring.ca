@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
-import { getRingOrder, getActiveMembers } from '../data'
+import { getEffectiveRingOrder, getActiveMembers } from '../data'
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/
 
@@ -26,7 +26,7 @@ app.get('/next/:slug', async (c) => {
     return c.redirect('/', 302)
   }
   const [order, activeMembers] = await Promise.all([
-    getRingOrder(c.env.WEBRING),
+    getEffectiveRingOrder(c.env.WEBRING),
     getActiveMembers(c.env.WEBRING),
   ])
 
@@ -55,7 +55,7 @@ app.get('/prev/:slug', async (c) => {
     return c.redirect('/', 302)
   }
   const [order, activeMembers] = await Promise.all([
-    getRingOrder(c.env.WEBRING),
+    getEffectiveRingOrder(c.env.WEBRING),
     getActiveMembers(c.env.WEBRING),
   ])
 

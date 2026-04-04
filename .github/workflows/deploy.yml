@@ -21,6 +21,12 @@ jobs:
 
       - run: npm ci
 
+      - run: npm test
+
+      - run: npm run typecheck
+
+      - run: npm run typecheck:scripts
+
       - name: Deploy Worker
         run: npx wrangler deploy
         env:
