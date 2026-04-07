@@ -12,6 +12,8 @@ interface MemberInput {
   active?: boolean
 }
 
+const ALLOWED_KEYS = new Set(['slug', 'name', 'url', 'city', 'active', 'lat', 'lng'])
+
 function sanitize(text: string): string {
   return text.replace(/[[\](){}*_~`#>!|\\]/g, '\\$&')
 }
@@ -178,11 +180,17 @@ for (const member of newMembers) {
 
   write('**Schema**')
 
-  if (!member.slug || !member.name || !member.url) {
-    write('- FAIL: Missing required fields. Every entry needs slug, name, and url.')
+  if (!member.slug || !member.name || !member.url || member.active === undefined) {
+    write('- FAIL: Missing required fields. Every entry needs slug, name, url, and active.')
     memberFailed = true
   } else {
-    write('- PASS: All required fields present (slug, name, url)')
+    write('- PASS: All required fields present (slug, name, url, active)')
+  }
+
+  const unknownKeys = Object.keys(member).filter((k) => !ALLOWED_KEYS.has(k))
+  if (unknownKeys.length > 0) {
+    write(`- FAIL: Unknown fields: ${unknownKeys.map((k) => `"${sanitize(k)}"`).join(', ')}. Allowed fields: ${[...ALLOWED_KEYS].join(', ')}`)
+    memberFailed = true
   }
 
   if (member.slug && !/^[a-z0-9-]+$/.test(member.slug)) {
