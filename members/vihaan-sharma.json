@@ -2,5 +2,6 @@
 	"name": "Vihaan Sharma",
 	"url": "https://vhaan.me/",
 	"city": "Toronto",
-	"active": true
+	"active": true,
+	"adding this": "to trigger CI"
 }
