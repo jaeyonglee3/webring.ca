@@ -45,7 +45,7 @@ export function DirectoryContent({ active }: { active: Member[] }) {
       {/* Right: D3 interactive ring */}
       <div class="directory-ring-wrap" id="directory-ring">
         <div id="ring-viz"></div>
-        <p class="directory-ring-hint">Drag the nodes</p>
+
       </div>
     </div>
   )

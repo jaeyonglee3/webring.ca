@@ -15,41 +15,13 @@ interface RingLink extends SimulationLinkDatum<RingMember> {
   target: number
 }
 
-function extractDomain(url: string): string {
-  return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
-}
-
 function buildLinks(members: RingMember[]): RingLink[] {
   const n = members.length
-  const seen = new Set<string>()
   const links: RingLink[] = []
 
-  function addLink(a: number, b: number) {
-    const key = [Math.min(a, b), Math.max(a, b)].join('-')
-    if (seen.has(key)) return
-    seen.add(key)
-    links.push({ source: a, target: b })
-  }
-
-  // Adjacent ring links
+  // Adjacent ring links only (prev/next)
   for (let i = 0; i < n; i++) {
-    addLink(i, (i + 1) % n)
-  }
-
-  // Cross-links: hash slug to pick 1-2 non-adjacent targets
-  for (let i = 0; i < n; i++) {
-    const slug = members[i].slug
-    let hash = 0
-    for (let c = 0; c < slug.length; c++) {
-      hash = ((hash << 5) - hash + slug.charCodeAt(c)) | 0
-    }
-    const offset = 2 + (Math.abs(hash) % Math.max(1, n - 3))
-    addLink(i, (i + offset) % n)
-    // Second cross-link for larger rings
-    if (n > 5) {
-      const offset2 = 3 + (Math.abs(hash >> 8) % Math.max(1, n - 4))
-      addLink(i, (i + offset2) % n)
-    }
+    links.push({ source: i, target: (i + 1) % n })
   }
 
   return links
@@ -66,11 +38,12 @@ function init() {
   // Dimensions
   const width = 400
   const height = 400
+  const pad = 30
   const cx = width / 2
   const cy = height / 2
-  const ringRadius = 130
+  const ringRadius = 150
   const nodeR = 5
-  const driftAlpha = 0.008
+  const driftAlpha = 0.006
 
   // Initial positions on the ring
   members.forEach((m, i) => {
@@ -82,14 +55,55 @@ function init() {
   // Build mesh links
   const linkData = buildLinks(members)
 
-  // Viewbox pan state
-  let vx = 0
-  let vy = 0
+  // Viewbox pan/zoom state
+  let vx = -pad
+  let vy = -pad
+  let vw = width + pad * 2
+  let vh = height + pad * 2
+  const zoomStep = 0.2
+  const minZoom = 0.4
+  const maxZoom = 3
+
+  function applyViewBox() {
+    svg.attr('viewBox', `${vx} ${vy} ${vw} ${vh}`)
+  }
+
+  function zoom(direction: 1 | -1) {
+    const factor = 1 + zoomStep * direction
+    const totalW = width + pad * 2
+    const totalH = height + pad * 2
+    const newW = Math.max(totalW / maxZoom, Math.min(totalW / minZoom, vw * factor))
+    const newH = Math.max(totalH / maxZoom, Math.min(totalH / minZoom, vh * factor))
+    // Keep center stable
+    vx += (vw - newW) / 2
+    vy += (vh - newH) / 2
+    vw = newW
+    vh = newH
+    applyViewBox()
+  }
+
+  // Zoom controls
+  const zoomWrap = document.createElement('div')
+  zoomWrap.className = 'ring-zoom-controls'
+  const btnIn = document.createElement('button')
+  btnIn.className = 'ring-zoom-btn'
+  btnIn.textContent = '+'
+  btnIn.setAttribute('aria-label', 'Zoom in')
+  btnIn.addEventListener('click', () => zoom(-1))
+  const btnOut = document.createElement('button')
+  btnOut.className = 'ring-zoom-btn'
+  btnOut.textContent = '\u2212'
+  btnOut.setAttribute('aria-label', 'Zoom out')
+  btnOut.addEventListener('click', () => zoom(1))
+  zoomWrap.appendChild(btnIn)
+  zoomWrap.appendChild(btnOut)
+  container.style.position = 'relative'
+  container.appendChild(zoomWrap)
 
   // SVG
   const svg = select(container)
     .append('svg')
-    .attr('viewBox', `0 0 ${width} ${height}`)
+    .attr('viewBox', `${-pad} ${-pad} ${width + pad * 2} ${height + pad * 2}`)
     .attr('class', 'directory-ring-svg')
     .style('cursor', 'grab')
 
@@ -103,7 +117,7 @@ function init() {
 
   function getScale(): number {
     const rect = svgEl.getBoundingClientRect()
-    return width / rect.width
+    return vw / rect.width
   }
 
   const panBehavior = drag<SVGSVGElement, unknown>()
@@ -123,7 +137,7 @@ function init() {
       const scale = getScale()
       vx = panStartVx - (event.x - panStartX) * scale
       vy = panStartVy - (event.y - panStartY) * scale
-      svg.attr('viewBox', `${vx} ${vy} ${width} ${height}`)
+      applyViewBox()
     })
     .on('end', () => {
       svg.style('cursor', 'grab')
@@ -163,7 +177,7 @@ function init() {
   nodes.append('text')
     .attr('class', 'ring-node-label')
     .attr('dy', nodeR + 10)
-    .text(d => extractDomain(d.url))
+    .text(d => d.name)
 
   // Tooltip
   const tooltip = svg.append('g').attr('class', 'ring-tooltip')
@@ -171,19 +185,55 @@ function init() {
   const tooltipName = tooltip.append('text').attr('class', 'ring-tooltip-name')
   const tooltipMeta = tooltip.append('text').attr('class', 'ring-tooltip-meta')
 
-  // Click to visit
+  // Touch: tap-to-select with visit affordance. Desktop: click-to-visit.
+  // On mobile the ring wrap has pointer-events:none (decorative only);
+  // selection is driven entirely by the card list.
+  const isTouchDevice = matchMedia('(pointer: coarse)').matches
+  let selectedSlug: string | null = null
+
+  function selectMember(slug: string) {
+    if (selectedSlug === slug) { deselectMember(); return }
+    hideBloom()
+    selectedSlug = slug
+    showBloom(slug)
+
+    // Mark selected card
+    const card = document.querySelector<HTMLElement>(`.directory-row[data-member="${slug}"]`)
+    document.querySelectorAll('.directory-row.is-selected').forEach(el => el.classList.remove('is-selected'))
+    card?.classList.add('is-selected')
+    card?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }
+
+  function deselectMember() {
+    document.querySelectorAll('.directory-row.is-selected').forEach(el => el.classList.remove('is-selected'))
+    hideBloom()
+  }
+
+  // Tap SVG background to deselect on touch
+  if (isTouchDevice) {
+    svgEl.addEventListener('click', (e) => {
+      if (!(e.target as Element).closest('.ring-node') && selectedSlug) {
+        deselectMember()
+      }
+    })
+  }
+
   nodes.on('click', (_event, d) => {
-    window.open(d.url, '_blank', 'noopener,noreferrer')
+    if (isTouchDevice) {
+      selectMember(d.slug)
+    } else {
+      window.open(d.url, '_blank', 'noopener,noreferrer')
+    }
   })
 
   // Force simulation — loose ring with visible links
   const simulation = forceSimulation<RingMember>(members)
-    .force('link', forceLink<RingMember, RingLink>(linkData).distance(60).strength(0.03))
-    .force('radial', forceRadial<RingMember>(ringRadius, cx, cy).strength(0.06))
-    .force('collide', forceCollide<RingMember>(nodeR + 4).strength(0.5))
-    .force('charge', forceManyBody<RingMember>().strength(-15).distanceMax(ringRadius * 2))
-    .alphaDecay(0.01)
-    .velocityDecay(0.3)
+    .force('link', forceLink<RingMember, RingLink>(linkData).distance(95).strength(0.015))
+    .force('radial', forceRadial<RingMember>(ringRadius, cx, cy).strength(0.025))
+    .force('collide', forceCollide<RingMember>(nodeR + 6).strength(0.4))
+    .force('charge', forceManyBody<RingMember>().strength(-40).distanceMax(ringRadius * 2.5))
+    .alphaDecay(0.008)
+    .velocityDecay(0.35)
     .on('tick', ticked)
 
   // Start gentle drift after initial settle
@@ -271,7 +321,9 @@ function init() {
     document.querySelectorAll('.ring-node.is-highlighted').forEach(el => el.classList.remove('is-highlighted'))
     document.querySelectorAll('.ring-link-line.is-highlighted').forEach(el => el.classList.remove('is-highlighted'))
     document.querySelectorAll('.directory-row.is-hovered').forEach(el => el.classList.remove('is-hovered'))
+    document.querySelectorAll('.directory-row.is-selected').forEach(el => el.classList.remove('is-selected'))
     tooltip.classed('is-visible', false)
+    selectedSlug = null
   }
 
   // Directory list <-> ring hover interaction
@@ -280,8 +332,27 @@ function init() {
   rows.forEach(row => {
     const slug = row.getAttribute('data-member')
     if (!slug) return
-    row.addEventListener('mouseenter', () => showBloom(slug))
-    row.addEventListener('mouseleave', () => hideBloom())
+
+    if (isTouchDevice) {
+      // Add visit link inside each card
+      const visitLink = document.createElement('a')
+      visitLink.className = 'directory-row-visit'
+      visitLink.href = row.getAttribute('href') ?? '#'
+      visitLink.target = '_blank'
+      visitLink.rel = 'noopener noreferrer'
+      visitLink.textContent = 'Visit \u2197'
+      row.appendChild(visitLink)
+
+      // Tap card: select member (prevent navigation)
+      row.addEventListener('click', (e) => {
+        if ((e.target as Element).closest('.directory-row-visit')) return
+        e.preventDefault()
+        selectMember(slug)
+      })
+    } else {
+      row.addEventListener('mouseenter', () => showBloom(slug))
+      row.addEventListener('mouseleave', () => hideBloom())
+    }
   })
 
   // Ring node hover -> bloom
