@@ -44,8 +44,18 @@ export function DirectoryContent({ active }: { active: Member[] }) {
 
       {/* Right: D3 interactive ring */}
       <div class="directory-ring-wrap" id="directory-ring">
+        <div class="directory-search">
+          <input
+            type="search"
+            id="directory-search-input"
+            class="directory-search-input"
+            placeholder="Search members by name..."
+            autocomplete="off"
+            spellcheck={false}
+            aria-label="Search members"
+          />
+        </div>
         <div id="ring-viz"></div>
-
       </div>
     </div>
   )

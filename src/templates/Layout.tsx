@@ -22,12 +22,18 @@ const Layout: FC<PropsWithChildren<{ title?: string }>> = ({ title, children }) 
             *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
             body {
               font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+              -webkit-font-smoothing: antialiased;
               line-height: 1.6;
-              color: #1a1a1a;
-              background: #F8F9FA;
+              color: #1c1917;
+              background: #f5f3f0;
               padding: 2.5rem;
             }
+            @media (prefers-color-scheme: dark) {
+              body { color: #e0ddd8; background: #13120f; }
+              a { color: #f55; }
+            }
             a { color: #AF272F; }
+            :focus-visible { outline: 2px solid #AF272F; outline-offset: 2px; }
             h1 { font-size: 1.5rem; margin-bottom: 1rem; font-weight: 700; letter-spacing: -0.03em; }
             p { margin-bottom: 1rem; }
           `)}</style>

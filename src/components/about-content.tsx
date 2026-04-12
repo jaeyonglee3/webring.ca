@@ -25,7 +25,10 @@ export function AboutContent() {
       {/* Right: visuals */}
       <div class="about-right">
         <img src="/maple-leaf.svg" alt="" aria-hidden="true" class="about-leaf-bg" />
-        <img src="/old-webrings.png" alt="" aria-hidden="true" class="about-nostalgia" />
+        <picture>
+          <source srcset="/old-webrings.webp" type="image/webp" />
+          <img src="/old-webrings.png" alt="" aria-hidden="true" class="about-nostalgia" loading="lazy" width="1013" height="740" />
+        </picture>
       </div>
     </div>
   )

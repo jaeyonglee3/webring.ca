@@ -9,6 +9,7 @@ import { SitePreviewContent } from '../components/preview-content'
 import { JoinContent } from '../components/join-content'
 
 const PANEL_NAMES = ['Splash', 'About', 'Directory', 'Explore', 'Join']
+const DIRECTORY_INDEX = PANEL_NAMES.indexOf('Directory')
 
 const app = new Hono<{ Bindings: Bindings }>()
 
@@ -56,11 +57,12 @@ app.get('/', async (c) => {
           <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
-          <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800;900&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet" />
+          <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;900&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet" />
           <link rel="stylesheet" href="/splash.css" />
         </head>
         <body>
-          <div id="ring" class="ring" data-panel-count={PANEL_NAMES.length}>
+          <a href="#ring" class="skip-link">Skip to directory</a>
+          <div id="ring" class="ring" data-panel-count={PANEL_NAMES.length} data-directory-index={DIRECTORY_INDEX}>
             <div class="ring-track">
               {/* Clone of last panel (Join) for backward cycling */}
               <section class="panel panel--clone" aria-hidden="true">
@@ -105,7 +107,7 @@ app.get('/', async (c) => {
           <script src="/splash.js"></script>
           {raw(`<script>window.__PREVIEW_MEMBERS = ${previewMembers}</script>`)}
           <script src="/preview.js"></script>
-          <script src="/d3-ring.js"></script>
+          {raw(`<script>(function(){var ring=document.getElementById('ring');var dirIdx=parseInt(ring.getAttribute('data-directory-index'),10);var loaded=false;ring.addEventListener('panelchange',function(e){if(!loaded&&e.detail.index===dirIdx){loaded=true;var s=document.createElement('script');s.src='/d3-ring.js';document.body.appendChild(s)}});var skip=document.querySelector('.skip-link');if(skip){skip.addEventListener('click',function(e){e.preventDefault();ring.dispatchEvent(new CustomEvent('snapto',{detail:{index:dirIdx}}));ring.focus()})}})();</script>`)}
         </body>
       </html>
     </>

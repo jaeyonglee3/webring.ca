@@ -1,4 +1,4 @@
-import { forceSimulation, forceRadial, forceCollide, forceManyBody, forceLink, type SimulationNodeDatum, type SimulationLinkDatum } from 'd3-force'
+import { forceSimulation, forceCenter, forceCollide, forceManyBody, forceLink, type SimulationNodeDatum, type SimulationLinkDatum } from 'd3-force'
 import { select } from 'd3-selection'
 import { drag } from 'd3-drag'
 
@@ -13,6 +13,10 @@ interface RingMember extends SimulationNodeDatum {
 interface RingLink extends SimulationLinkDatum<RingMember> {
   source: number
   target: number
+}
+
+function displayDomain(url: string): string {
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
 function buildLinks(members: RingMember[]): RingLink[] {
@@ -38,18 +42,29 @@ function init() {
   // Dimensions
   const width = 400
   const height = 400
-  const pad = 30
+  const pad = 80
   const cx = width / 2
   const cy = height / 2
-  const ringRadius = 150
+  const spread = 150
   const nodeR = 5
   const driftAlpha = 0.006
 
-  // Initial positions on the ring
-  members.forEach((m, i) => {
-    const angle = (i / members.length) * Math.PI * 2 - Math.PI / 2
-    m.x = cx + Math.cos(angle) * ringRadius
-    m.y = cy + Math.sin(angle) * ringRadius
+  // Deterministic pseudo-random so the layout is stable per-session but not uniform
+  function hashSlug(slug: string): number {
+    let h = 2166136261
+    for (let i = 0; i < slug.length; i++) {
+      h ^= slug.charCodeAt(i)
+      h = Math.imul(h, 16777619)
+    }
+    return ((h >>> 0) % 10000) / 10000
+  }
+
+  // Initial positions: randomized jitter around center
+  members.forEach((m) => {
+    const r = hashSlug(m.slug) * spread
+    const a = hashSlug(m.slug + '#a') * Math.PI * 2
+    m.x = cx + Math.cos(a) * r
+    m.y = cy + Math.sin(a) * r
   })
 
   // Build mesh links
@@ -60,6 +75,10 @@ function init() {
   let vy = -pad
   let vw = width + pad * 2
   let vh = height + pad * 2
+  const vx0 = vx
+  const vy0 = vy
+  const vw0 = vw
+  const vh0 = vh
   const zoomStep = 0.2
   const minZoom = 0.4
   const maxZoom = 3
@@ -105,6 +124,8 @@ function init() {
     .append('svg')
     .attr('viewBox', `${-pad} ${-pad} ${width + pad * 2} ${height + pad * 2}`)
     .attr('class', 'directory-ring-svg')
+    .attr('role', 'img')
+    .attr('aria-label', `Webring visualization with ${members.length} members`)
     .style('cursor', 'grab')
 
   // Pan: drag on SVG background to move the viewBox
@@ -145,13 +166,6 @@ function init() {
 
   svg.call(panBehavior)
 
-  // Ghost ring path
-  svg.append('circle')
-    .attr('cx', cx)
-    .attr('cy', cy)
-    .attr('r', ringRadius)
-    .attr('class', 'ring-ghost-path')
-
   // Links
   const linkGroup = svg.append('g').attr('class', 'ring-links')
   const linkEls = linkGroup.selectAll<SVGLineElement, RingLink>('line')
@@ -177,13 +191,7 @@ function init() {
   nodes.append('text')
     .attr('class', 'ring-node-label')
     .attr('dy', nodeR + 10)
-    .text(d => d.name)
-
-  // Tooltip
-  const tooltip = svg.append('g').attr('class', 'ring-tooltip')
-  const tooltipBg = tooltip.append('rect').attr('class', 'ring-tooltip-bg')
-  const tooltipName = tooltip.append('text').attr('class', 'ring-tooltip-name')
-  const tooltipMeta = tooltip.append('text').attr('class', 'ring-tooltip-meta')
+    .text(d => displayDomain(d.url))
 
   // Touch: tap-to-select with visit affordance. Desktop: click-to-visit.
   // On mobile the ring wrap has pointer-events:none (decorative only);
@@ -226,17 +234,24 @@ function init() {
     }
   })
 
-  // Force simulation — loose ring with visible links
+  // Force simulation — sparse organic graph
   const simulation = forceSimulation<RingMember>(members)
-    .force('link', forceLink<RingMember, RingLink>(linkData).distance(95).strength(0.015))
-    .force('radial', forceRadial<RingMember>(ringRadius, cx, cy).strength(0.025))
-    .force('collide', forceCollide<RingMember>(nodeR + 6).strength(0.4))
-    .force('charge', forceManyBody<RingMember>().strength(-40).distanceMax(ringRadius * 2.5))
-    .alphaDecay(0.008)
-    .velocityDecay(0.35)
-    .on('tick', ticked)
+    .force('link', forceLink<RingMember, RingLink>(linkData)
+      .distance(d => 60 + hashSlug(((d.source as unknown as RingMember).slug) + ((d.target as unknown as RingMember).slug)) * 70)
+      .strength(0.05))
+    .force('center', forceCenter<RingMember>(cx, cy).strength(0.02))
+    .force('collide', forceCollide<RingMember>(nodeR + 8).strength(0.7))
+    .force('charge', forceManyBody<RingMember>().strength(-120).distanceMax(spread * 2.5))
+    .alphaDecay(0.012)
+    .velocityDecay(0.4)
 
-  // Start gentle drift after initial settle
+  // Pre-settle synchronously so the first paint is already in the expanded state
+  const settleTicks = Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay()))
+  simulation.tick(settleTicks)
+  simulation.on('tick', ticked)
+  ticked()
+
+  // Start gentle drift after the settled initial render
   setTimeout(() => {
     simulation.alphaTarget(driftAlpha).restart()
   }, 3000)
@@ -287,33 +302,6 @@ function init() {
 
     // Highlight directory row
     document.querySelector(`.directory-row[data-member="${slug}"]`)?.classList.add('is-hovered')
-
-    // Show tooltip
-    const member = members.find(m => m.slug === slug)
-    if (member) {
-      const name = member.name
-      const meta = member.city || ''
-      tooltipName.text(name)
-      tooltipMeta.text(meta)
-
-      // Position tooltip above node
-      const tx = member.x!
-      const ty = member.y! - nodeR - 22
-
-      tooltipName.attr('x', tx).attr('y', ty)
-      tooltipMeta.attr('x', tx).attr('y', ty + 11)
-      tooltipName.attr('text-anchor', 'middle')
-      tooltipMeta.attr('text-anchor', 'middle')
-
-      // Size background
-      const nameLen = name.length * 5.5
-      const metaLen = meta.length * 4.5
-      const bgW = Math.max(nameLen, metaLen) + 16
-      const bgH = 28
-      tooltipBg.attr('x', tx - bgW / 2).attr('y', ty - 12).attr('width', bgW).attr('height', bgH)
-
-      tooltip.classed('is-visible', true)
-    }
   }
 
   function hideBloom() {
@@ -322,7 +310,6 @@ function init() {
     document.querySelectorAll('.ring-link-line.is-highlighted').forEach(el => el.classList.remove('is-highlighted'))
     document.querySelectorAll('.directory-row.is-hovered').forEach(el => el.classList.remove('is-hovered'))
     document.querySelectorAll('.directory-row.is-selected').forEach(el => el.classList.remove('is-selected'))
-    tooltip.classed('is-visible', false)
     selectedSlug = null
   }
 
@@ -359,6 +346,121 @@ function init() {
   nodes
     .on('mouseenter', (_event, d) => showBloom(d.slug))
     .on('mouseleave', () => hideBloom())
+
+  // Search bar: regex-from-start filter that highlights rows + nodes
+  // and pans/zooms the ring to fit matches.
+  const searchInput = document.getElementById('directory-search-input') as HTMLInputElement | null
+  const directoryList = document.querySelector<HTMLElement>('.directory-list')
+
+  function clearSearchState() {
+    ringWrap?.classList.remove('has-highlight')
+    directoryList?.classList.remove('has-search')
+    document.querySelectorAll('.ring-node.is-highlighted').forEach(el => el.classList.remove('is-highlighted'))
+    document.querySelectorAll('.ring-link-line.is-highlighted').forEach(el => el.classList.remove('is-highlighted'))
+    document.querySelectorAll('.directory-row.is-search-match').forEach(el => el.classList.remove('is-search-match'))
+  }
+
+  function resetViewBox() {
+    vx = vx0
+    vy = vy0
+    vw = vw0
+    vh = vh0
+    applyViewBox()
+  }
+
+  function fitViewBoxToMatches(matches: RingMember[]) {
+    if (matches.length === 0) return
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const m of matches) {
+      if (m.x == null || m.y == null) continue
+      if (m.x < minX) minX = m.x
+      if (m.y < minY) minY = m.y
+      if (m.x > maxX) maxX = m.x
+      if (m.y > maxY) maxY = m.y
+    }
+    if (!isFinite(minX)) return
+
+    const padX = 50
+    const padY = 40
+    let bw = (maxX - minX) + padX * 2
+    let bh = (maxY - minY) + padY * 2
+    const minFrame = 220
+    if (bw < minFrame) bw = minFrame
+    if (bh < minFrame) bh = minFrame
+
+    // Match aspect ratio of the original frame so the SVG doesn't distort
+    const baseAspect = vw0 / vh0
+    const curAspect = bw / bh
+    if (curAspect > baseAspect) {
+      bh = bw / baseAspect
+    } else {
+      bw = bh * baseAspect
+    }
+
+    const cxMatches = (minX + maxX) / 2
+    const cyMatches = (minY + maxY) / 2
+    vx = cxMatches - bw / 2
+    vy = cyMatches - bh / 2
+    vw = bw
+    vh = bh
+    applyViewBox()
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim()
+
+      if (q === '') {
+        clearSearchState()
+        resetViewBox()
+        simulation.alphaTarget(driftAlpha).restart()
+        return
+      }
+
+      let re: RegExp
+      try {
+        re = new RegExp('^' + q, 'i')
+      } catch {
+        return
+      }
+
+      // Stop drift so the frame stays stable while searching
+      simulation.alphaTarget(0)
+
+      const matched = members.filter(m => re.test(m.name))
+      const matchedSlugs = new Set(matched.map(m => m.slug))
+
+      // Clear previous highlight classes
+      document.querySelectorAll('.ring-node.is-highlighted').forEach(el => el.classList.remove('is-highlighted'))
+      document.querySelectorAll('.ring-link-line.is-highlighted').forEach(el => el.classList.remove('is-highlighted'))
+      document.querySelectorAll('.directory-row.is-search-match').forEach(el => el.classList.remove('is-search-match'))
+
+      ringWrap?.classList.add('has-highlight')
+      directoryList?.classList.add('has-search')
+
+      for (const slug of matchedSlugs) {
+        document.getElementById(`ring-node-${slug}`)?.classList.add('is-highlighted')
+        document.querySelector(`.directory-row[data-member="${slug}"]`)?.classList.add('is-search-match')
+      }
+
+      linkEls.each(function (d) {
+        const s = d.source as unknown as RingMember
+        const t = d.target as unknown as RingMember
+        if (matchedSlugs.has(s.slug) || matchedSlugs.has(t.slug)) {
+          (this as SVGLineElement).classList.add('is-highlighted')
+        }
+      })
+
+      if (matched.length > 0) {
+        fitViewBoxToMatches(matched)
+      } else {
+        resetViewBox()
+      }
+    })
+  }
 }
 
 if (document.readyState === 'loading') {

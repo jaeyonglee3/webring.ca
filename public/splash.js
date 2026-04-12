@@ -14,6 +14,15 @@
   var currentAngle = 0;
   var targetAngle = 0;
   var rawTarget = 0;
+
+  // Restore panel position after resize-triggered reload
+  var _saved = parseInt(sessionStorage.getItem('wr-panel'), 10);
+  if (!isNaN(_saved) && _saved >= 0 && _saved < PANEL_COUNT) {
+    sessionStorage.removeItem('wr-panel');
+    currentAngle = _saved * ANGLE_STEP;
+    targetAngle = currentAngle;
+    rawTarget = currentAngle;
+  }
   // Tuning
   var SCROLL_EASE = 0.18;
   var STEPS_PER_PANEL = 20;
@@ -72,7 +81,50 @@
 
   // ── Wheel (desktop) ──
   if (!isMobile) {
+    // Overflow accumulator: absorb scroll at list boundaries before
+    // handing off to panel rotation, so the transition feels intentional.
+    var overflowDelta = 0;
+    var OVERFLOW_THRESHOLD = 150; // pixels of accumulated overscroll before panel rotates
+    var overflowTimer = 0;
+
     ring.addEventListener('wheel', function(e) {
+      var target = e.target;
+      var scrollable = target && target.closest ? target.closest('.directory-list') : null;
+
+      if (scrollable) {
+        var atTop = scrollable.scrollTop <= 0;
+        var atBottom = scrollable.scrollTop + scrollable.clientHeight >= scrollable.scrollHeight - 1;
+        var scrollingUp = e.deltaY < 0;
+        var scrollingDown = e.deltaY > 0;
+
+        // Still has room to scroll inside the list
+        if ((scrollingDown && !atBottom) || (scrollingUp && !atTop)) {
+          overflowDelta = 0;
+          return;
+        }
+
+        // At boundary: accumulate overflow before rotating.
+        // Don't preventDefault here — list is at its edge so native
+        // scroll does nothing, but preventing it can interrupt inertia.
+        var d = e.deltaY;
+        if (e.deltaMode === 1) d *= 40;
+
+        // Reset accumulator if direction reverses
+        if ((overflowDelta > 0 && d < 0) || (overflowDelta < 0 && d > 0)) {
+          overflowDelta = 0;
+        }
+        overflowDelta += d;
+
+        // Decay accumulator if user pauses
+        clearTimeout(overflowTimer);
+        overflowTimer = setTimeout(function() { overflowDelta = 0; }, 300);
+
+        if (Math.abs(overflowDelta) < OVERFLOW_THRESHOLD) return;
+
+        // Threshold crossed: pass remaining delta through as panel rotation
+        overflowDelta = 0;
+      }
+
       e.preventDefault();
 
       var delta = e.deltaY;
@@ -209,8 +261,16 @@
     unsettle();
   });
 
-  // ── Keyboard ──
-  document.addEventListener('keydown', function(e) {
+  // ── Keyboard (scoped to ring so screen readers can still use arrow keys) ──
+  ring.setAttribute('tabindex', '0');
+  ring.setAttribute('role', 'region');
+  ring.setAttribute('aria-roledescription', 'carousel');
+  ring.setAttribute('aria-label', 'Site panels');
+
+  ring.addEventListener('keydown', function(e) {
+    // Only navigate panels when the ring itself has focus, not child elements
+    if (e.target !== ring) return;
+
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
       targetAngle = snapAngle(currentAngle) + ANGLE_STEP;
@@ -283,7 +343,12 @@
   window.addEventListener('resize', function() {
     var wasMobile = isMobile;
     isMobile = window.matchMedia('(max-width: 767px)').matches;
-    if (isMobile !== wasMobile) { window.location.reload(); return; }
+    if (isMobile !== wasMobile) {
+      var norm = ((Math.round(currentAngle / ANGLE_STEP) % PANEL_COUNT) + PANEL_COUNT) % PANEL_COUNT;
+      sessionStorage.setItem('wr-panel', norm);
+      window.location.reload();
+      return;
+    }
     panelDim = isMobile ? window.innerHeight : window.innerWidth;
     radius = computeRadius();
     layoutPanels();
