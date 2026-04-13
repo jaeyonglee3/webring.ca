@@ -177,15 +177,12 @@
 
           unsettle();
 
-          // Update active dot + panel pointer-events
+          // Update active dot (lightweight -- just class toggle)
           var norm = ((Math.round(currentAngle / ANGLE_STEP) % PANEL_COUNT) + PANEL_COUNT) % PANEL_COUNT;
           if (norm !== prevActiveIdx) {
             prevActiveIdx = norm;
             dots.forEach(function(dot, i) {
               dot.classList.toggle('is-active', i === norm);
-            });
-            panels.forEach(function(p, i) {
-              p.classList.toggle('is-active-panel', i === norm);
             });
             ring.dispatchEvent(new CustomEvent('panelchange', { detail: { index: norm } }));
           }
@@ -299,9 +296,6 @@
       dots.forEach(function(dot, i) {
         dot.classList.toggle('is-active', i === norm);
       });
-      panels.forEach(function(p, i) {
-        p.classList.toggle('is-active-panel', i === norm);
-      });
       ring.dispatchEvent(new CustomEvent('panelchange', { detail: { index: norm } }));
     }
 
@@ -323,7 +317,6 @@
   var initIdx = ((Math.round(currentAngle / ANGLE_STEP) % PANEL_COUNT) + PANEL_COUNT) % PANEL_COUNT;
   prevActiveIdx = initIdx;
   dots.forEach(function(dot, i) { dot.classList.toggle('is-active', i === initIdx); });
-  panels.forEach(function(p, i) { p.classList.toggle('is-active-panel', i === initIdx); });
   ring.dispatchEvent(new CustomEvent('panelsettle', { detail: { index: initIdx } }));
 
   // ── Pause when hidden ──

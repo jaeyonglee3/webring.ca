@@ -103,11 +103,6 @@ body {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   contain: layout style paint;
-  pointer-events: none;
-}
-
-.panel.is-active-panel {
-  pointer-events: auto;
 }
 
 .panel--clone { display: none; }
