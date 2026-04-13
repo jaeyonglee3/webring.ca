@@ -90,7 +90,47 @@ function init() {
     svg.attr('viewBox', `${vx} ${vy} ${vw} ${vh}`)
   }
 
+  // Animated viewBox transition
+  let viewBoxAnimFrame = 0
+
+  function animateViewBox(tx: number, ty: number, tw: number, th: number, duration = 300) {
+    if (viewBoxAnimFrame) cancelAnimationFrame(viewBoxAnimFrame)
+    const sx = vx, sy = vy, sw = vw, sh = vh
+    const t0 = performance.now()
+
+    function step(now: number) {
+      const p = Math.min((now - t0) / duration, 1)
+      const e = p * (2 - p) // ease-out quad
+      vx = sx + (tx - sx) * e
+      vy = sy + (ty - sy) * e
+      vw = sw + (tw - sw) * e
+      vh = sh + (th - sh) * e
+      applyViewBox()
+      if (p < 1) viewBoxAnimFrame = requestAnimationFrame(step)
+      else viewBoxAnimFrame = 0
+    }
+
+    viewBoxAnimFrame = requestAnimationFrame(step)
+  }
+
+  function focusOnMember(slug: string) {
+    const member = members.find(m => m.slug === slug)
+    if (!member || member.x == null || member.y == null) return
+
+    const focusZoom = 1.6
+    let fw = totalW / focusZoom
+    let fh = totalH / focusZoom
+    const baseAspect = vw0 / vh0
+    if (fw / fh > baseAspect) fh = fw / baseAspect
+    else fw = fh * baseAspect
+
+    const fx = Math.max(-pad, Math.min(totalW - fw - pad, member.x - fw / 2))
+    const fy = Math.max(-pad, Math.min(totalH - fh - pad, member.y - fh / 2))
+    animateViewBox(fx, fy, fw, fh)
+  }
+
   function zoom(direction: 1 | -1) {
+    if (viewBoxAnimFrame) { cancelAnimationFrame(viewBoxAnimFrame); viewBoxAnimFrame = 0 }
     const factor = 1 + zoomStep * direction
     const newW = Math.max(totalW / maxZoom, Math.min(totalW / minZoom, vw * factor))
     const newH = Math.max(totalH / maxZoom, Math.min(totalH / minZoom, vh * factor))
@@ -115,8 +155,15 @@ function init() {
   btnOut.textContent = '\u2212'
   btnOut.setAttribute('aria-label', 'Zoom out')
   btnOut.addEventListener('click', () => zoom(1))
+  const expandIcon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4"/><path d="M10 2h4v4"/><path d="M14 10v4h-4"/><path d="M6 14H2v-4"/></svg>'
+  const collapseIcon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8"/><path d="M12 4l-8 8"/></svg>'
+  const btnExpand = document.createElement('button')
+  btnExpand.className = 'ring-zoom-btn ring-expand-btn'
+  btnExpand.innerHTML = expandIcon
+  btnExpand.setAttribute('aria-label', 'Explore ring fullscreen')
   zoomWrap.appendChild(btnIn)
   zoomWrap.appendChild(btnOut)
+  zoomWrap.appendChild(btnExpand)
   container.style.position = 'relative'
   container.appendChild(zoomWrap)
 
@@ -128,6 +175,10 @@ function init() {
     .attr('role', 'img')
     .attr('aria-label', `Webring visualization with ${members.length} members`)
     .style('cursor', 'grab')
+
+  // Mobile: detect via layout breakpoint so Firefox responsive mode works too
+  const isMobileLayout = matchMedia('(max-width: 767px)').matches
+  const isTouchDevice = isMobileLayout || matchMedia('(pointer: coarse)').matches
 
   // Pan: drag on SVG background to move the viewBox
   let panStartX = 0
@@ -165,7 +216,125 @@ function init() {
       svg.style('cursor', 'grab')
     })
 
-  svg.call(panBehavior)
+  if (!isTouchDevice) svg.call(panBehavior)
+
+  // Fullscreen explore mode (touch only)
+  let isFullscreen = false
+
+  if (isTouchDevice) {
+    let touchPanStart = { x: 0, y: 0, vx: 0, vy: 0 }
+    let lastPinchDist = 0
+    let isPanning = false
+
+    // Overlay lives on <body> to escape transform-containing-block ancestors
+    const overlay = document.createElement('div')
+    overlay.className = 'ring-fullscreen-overlay'
+    overlay.hidden = true
+    document.body.appendChild(overlay)
+
+    function enterFullscreen() {
+      isFullscreen = true
+      if (viewBoxAnimFrame) { cancelAnimationFrame(viewBoxAnimFrame); viewBoxAnimFrame = 0 }
+      overlay.hidden = false
+      overlay.appendChild(svgEl)
+      overlay.appendChild(zoomWrap)
+      document.body.classList.add('has-ring-fullscreen')
+      btnExpand.innerHTML = collapseIcon
+      btnExpand.setAttribute('aria-label', 'Close')
+      svgEl.style.touchAction = 'none'
+      simulation.alphaTarget(0)
+    }
+
+    function exitFullscreen() {
+      isFullscreen = false
+      container.appendChild(svgEl)
+      container.appendChild(zoomWrap)
+      overlay.hidden = true
+      document.body.classList.remove('has-ring-fullscreen')
+      btnExpand.innerHTML = expandIcon
+      btnExpand.setAttribute('aria-label', 'Explore ring fullscreen')
+      svgEl.style.touchAction = ''
+      if (selectedSlug) {
+        focusOnMember(selectedSlug)
+      } else {
+        animateViewBox(vx0, vy0, vw0, vh0)
+        simulation.alphaTarget(driftAlpha).restart()
+      }
+    }
+
+    btnExpand.addEventListener('click', () => {
+      if (isFullscreen) exitFullscreen()
+      else enterFullscreen()
+    })
+
+    svgEl.addEventListener('touchstart', (e: TouchEvent) => {
+      if (!isFullscreen) return
+      isPanning = false
+
+      if (e.touches.length === 2) {
+        e.preventDefault()
+        const dx = e.touches[1].clientX - e.touches[0].clientX
+        const dy = e.touches[1].clientY - e.touches[0].clientY
+        lastPinchDist = Math.hypot(dx, dy)
+      }
+
+      touchPanStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, vx, vy }
+    }, { passive: false })
+
+    svgEl.addEventListener('touchmove', (e: TouchEvent) => {
+      if (!isFullscreen) return
+
+      if (e.touches.length === 1 && !isPanning) {
+        const dx = Math.abs(e.touches[0].clientX - touchPanStart.x)
+        const dy = Math.abs(e.touches[0].clientY - touchPanStart.y)
+        if (dx + dy < 8) return
+        isPanning = true
+        if (viewBoxAnimFrame) { cancelAnimationFrame(viewBoxAnimFrame); viewBoxAnimFrame = 0 }
+      }
+
+      e.preventDefault()
+
+      if (e.touches.length === 1 && isPanning) {
+        const scale = getScale()
+        vx = touchPanStart.vx - (e.touches[0].clientX - touchPanStart.x) * scale
+        vy = touchPanStart.vy - (e.touches[0].clientY - touchPanStart.y) * scale
+        applyViewBox()
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[1].clientX - e.touches[0].clientX
+        const dy = e.touches[1].clientY - e.touches[0].clientY
+        const dist = Math.hypot(dx, dy)
+        if (lastPinchDist === 0) { lastPinchDist = dist; return }
+
+        const factor = lastPinchDist / dist
+        const newW = Math.max(totalW / maxZoom, Math.min(totalW / minZoom, vw * factor))
+        const newH = Math.max(totalH / maxZoom, Math.min(totalH / minZoom, vh * factor))
+
+        const rect = svgEl.getBoundingClientRect()
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2
+        const svgMidX = vx + (midX - rect.left) / rect.width * vw
+        const svgMidY = vy + (midY - rect.top) / rect.height * vh
+
+        vx = svgMidX - (svgMidX - vx) * (newW / vw)
+        vy = svgMidY - (svgMidY - vy) * (newH / vh)
+        vw = newW
+        vh = newH
+        applyViewBox()
+        lastPinchDist = dist
+      }
+    }, { passive: false })
+
+    svgEl.addEventListener('touchend', (e: TouchEvent) => {
+      if (!isFullscreen) return
+      isPanning = false
+      if (e.touches.length === 1) {
+        touchPanStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, vx, vy }
+        lastPinchDist = 0
+      } else if (e.touches.length === 0) {
+        lastPinchDist = 0
+      }
+    })
+  }
 
   // Links
   const linkGroup = svg.append('g').attr('class', 'ring-links')
@@ -183,6 +352,15 @@ function init() {
     .attr('class', 'ring-node')
     .attr('id', d => `ring-node-${d.slug}`)
 
+  // Touch hit area (invisible, larger target for taps)
+  if (isTouchDevice) {
+    nodes.append('circle')
+      .attr('r', nodeR * 5)
+      .attr('fill', 'transparent')
+      .attr('class', 'ring-node-hit')
+      .style('pointer-events', 'auto')
+  }
+
   // Node dots
   nodes.append('circle')
     .attr('r', nodeR)
@@ -195,12 +373,9 @@ function init() {
     .text(d => displayDomain(d.url))
 
   // Touch: tap-to-select with visit affordance. Desktop: click-to-visit.
-  // On mobile the ring wrap has pointer-events:none (decorative only);
-  // selection is driven entirely by the card list.
-  const isTouchDevice = matchMedia('(pointer: coarse)').matches
   let selectedSlug: string | null = null
 
-  function selectMember(slug: string) {
+  function selectMember(slug: string, scrollCard = true) {
     if (selectedSlug === slug) { deselectMember(); return }
     hideBloom()
     selectedSlug = slug
@@ -210,12 +385,19 @@ function init() {
     const card = document.querySelector<HTMLElement>(`.directory-row[data-member="${slug}"]`)
     document.querySelectorAll('.directory-row.is-selected').forEach(el => el.classList.remove('is-selected'))
     card?.classList.add('is-selected')
-    card?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    if (scrollCard) {
+      card?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    }
+
+    // Freeze drift so the selected node doesn't slide away
+    if (isTouchDevice) simulation.alphaTarget(0)
   }
 
   function deselectMember() {
+    selectedSlug = null
     document.querySelectorAll('.directory-row.is-selected').forEach(el => el.classList.remove('is-selected'))
     hideBloom()
+    if (isTouchDevice && !isFullscreen) simulation.alphaTarget(driftAlpha).restart()
   }
 
   // Tap SVG background to deselect on touch
@@ -227,8 +409,9 @@ function init() {
     })
   }
 
-  nodes.on('click', (_event, d) => {
+  nodes.on('click', (event, d) => {
     if (isTouchDevice) {
+      event.stopPropagation()
       selectMember(d.slug)
     } else {
       window.open(d.url, '_blank', 'noopener,noreferrer')
@@ -241,7 +424,7 @@ function init() {
       .distance(d => 60 + hashSlug(((d.source as unknown as RingMember).slug) + ((d.target as unknown as RingMember).slug)) * 70)
       .strength(0.05))
     .force('center', forceCenter<RingMember>(cx, cy).strength(0.02))
-    .force('collide', forceCollide<RingMember>(nodeR + 8).strength(0.7))
+    .force('collide', forceCollide<RingMember>(isTouchDevice ? nodeR * 5 : nodeR + 8).strength(0.7))
     .force('charge', forceManyBody<RingMember>().strength(-120).distanceMax(spread * 2.5))
     .alphaDecay(0.012)
     .velocityDecay(0.4)
@@ -283,7 +466,7 @@ function init() {
       d.fy = null
     })
 
-  nodes.call(dragBehavior)
+  if (!isTouchDevice) nodes.call(dragBehavior)
 
   // Bloom hover helpers
   const ringWrap = container.closest('.directory-ring-wrap')
@@ -322,18 +505,21 @@ function init() {
     if (!slug) return
 
     if (isTouchDevice) {
+      const href = row.getAttribute('href')
+      if (!href) return
       const visitLink = document.createElement('a')
       visitLink.className = 'directory-row-visit'
-      visitLink.href = row.getAttribute('href') ?? '#'
+      visitLink.href = href
       visitLink.target = '_blank'
       visitLink.rel = 'noopener noreferrer'
-      visitLink.textContent = 'Visit \u2197'
+      visitLink.setAttribute('aria-label', `Visit ${row.querySelector('.directory-row-name')?.textContent ?? 'site'}`)
+      visitLink.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3H3.5A1.5 1.5 0 0 0 2 4.5v8A1.5 1.5 0 0 0 3.5 14h8A1.5 1.5 0 0 0 13 12.5V10"/><path d="M9 2h5v5"/><path d="M14 2 7.5 8.5"/></svg>'
       row.appendChild(visitLink)
 
       row.addEventListener('click', (e) => {
         if ((e.target as Element).closest('.directory-row-visit')) return
         e.preventDefault()
-        selectMember(slug)
+        selectMember(slug, false)
       })
     } else {
       row.addEventListener('mouseenter', () => showBloom(slug))
@@ -487,11 +673,7 @@ function init() {
   }
 
   function resetViewBox() {
-    vx = vx0
-    vy = vy0
-    vw = vw0
-    vh = vh0
-    applyViewBox()
+    animateViewBox(vx0, vy0, vw0, vh0)
   }
 
   function fitViewBoxToMatches(matches: RingMember[]) {
@@ -528,11 +710,7 @@ function init() {
 
     const cxMatches = (minX + maxX) / 2
     const cyMatches = (minY + maxY) / 2
-    vx = cxMatches - bw / 2
-    vy = cyMatches - bh / 2
-    vw = bw
-    vh = bh
-    applyViewBox()
+    animateViewBox(cxMatches - bw / 2, cyMatches - bh / 2, bw, bh)
   }
 
   if (searchInput) {
