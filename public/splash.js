@@ -89,7 +89,7 @@
     ring.addEventListener('wheel', function(e) {
       e.preventDefault();
 
-      var delta = e.deltaY;
+      var delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (e.deltaMode === 1) delta *= 40;
       if (e.deltaMode === 2) delta *= panelDim;
 
