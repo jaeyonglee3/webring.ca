@@ -19,7 +19,8 @@ jobs:
       - name: Overlay PR member files
         run: |
           git fetch origin pull/${{ github.event.pull_request.number }}/head
-          for file in $(git diff --name-only HEAD ${{ github.event.pull_request.head.sha }} -- 'members/*.json'); do
+          MERGE_BASE=$(git merge-base HEAD ${{ github.event.pull_request.head.sha }})
+          for file in $(git diff --name-only "$MERGE_BASE" ${{ github.event.pull_request.head.sha }} -- 'members/*.json'); do
             git show ${{ github.event.pull_request.head.sha }}:"$file" > "$file" 2>/dev/null || rm -f "$file"
           done
 
